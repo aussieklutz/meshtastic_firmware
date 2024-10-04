@@ -19,6 +19,7 @@ class ScanI2C
         TDECKKB,
         BBQ10KB,
         RAK14004,
+        MPR121KB,
         PMU_AXP192_AXP2101,
         BME_680,
         BME_280,
