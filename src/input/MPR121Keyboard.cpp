@@ -55,6 +55,21 @@ unsigned char LongMap[12] = {
     MPR121_NONE, MPR121_DOWN, MPR121_NONE
 };
 
+// Translation map from left to right, top to bottom layout to a more convenient layout to manufacture, matching the
+// https://www.amazon.com.au/Capacitive-Sensitive-Sensitivity-Replacement-Traditional/dp/B0CTJD5KW9/ref=pd_ci_mcx_mh_mcx_views_0_title?th=1
+/*uint8_t KeyMap[12] = {
+    9, 6, 3, 0,
+    10, 7, 4, 1,
+    11, 8, 5, 2
+};*/
+// Rotated Layout
+uint8_t KeyMap[12] = {
+    2, 5, 8, 11,
+    1, 4, 7, 10,
+    0, 3, 6, 9
+};
+
+
 MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(nullptr), writeCallback(nullptr) {
     state = Init;
     last_key = -1;
@@ -138,6 +153,24 @@ uint8_t MPR121Keyboard::keyCount(uint16_t value) const
     return numButtonsPressed;
 }
 
+bool MPR121Keyboard::hasEvent() {
+    return queue.length() > 0;
+}
+
+void MPR121Keyboard::queueEvent(char next) {
+    if(next == MPR121_NONE) { return; }
+    queue.concat(next);
+}
+
+char MPR121Keyboard::dequeueEvent() {
+    if(queue.length() < 1) {
+        return MPR121_NONE;
+    }
+    char next = queue.charAt(0);
+    queue.remove(0,1);
+    return next;
+}
+
 void MPR121Keyboard::trigger()
 {
     // Intended to fire in response to an interrupt from the MPR121 or a longpress callback
@@ -176,7 +209,7 @@ void MPR121Keyboard::pressed(uint16_t keyRegister) {
     uint8_t next_key = 0;
     for (uint8_t i = 0; i < 12; ++i) {
         if (buttonState & (1 << i)) {
-            next_key = i;
+            next_key = KeyMap[i];
         }
     }
     uint32_t now = millis();
@@ -197,24 +230,6 @@ void MPR121Keyboard::pressed(uint16_t keyRegister) {
     return;
 }
 
-bool MPR121Keyboard::hasEvent() {
-    return queue.length() > 0;
-}
-
-void MPR121Keyboard::queueEvent(char next) {
-    if(next == MPR121_NONE) { return; }
-    queue.concat(next);
-}
-
-char MPR121Keyboard::dequeueEvent() {
-    if(queue.length() < 1) {
-        return MPR121_NONE;
-    }
-    char next = queue.charAt(0);
-    queue.remove(0,1);
-    return next;
-}
-
 void MPR121Keyboard::held(uint16_t keyRegister) {
     if(state == Init || state == Busy) { return; }
     if(keyCount(keyRegister) != 1) { return; }
@@ -222,7 +237,7 @@ void MPR121Keyboard::held(uint16_t keyRegister) {
     uint8_t next_key = 0;
     for (uint8_t i = 0; i < 12; ++i) {
         if (buttonState & (1 << i)) {
-            next_key = i;
+            next_key = KeyMap[i];
         }
     }
     uint32_t now = millis();
