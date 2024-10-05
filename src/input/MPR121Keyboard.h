@@ -1,24 +1,23 @@
 // Based on the BBQ10 Keyboard
 
 #include "configuration.h"
+#include "concurrency/NotifiedWorkerThread.h"
 #include <Wire.h>
-
-#define KEY_MOD_ALT (0x1A)
-#define KEY_MOD_SHL (0x1B)
-#define KEY_MOD_SHR (0x1C)
-#define KEY_MOD_SYM (0x1D)
 
 class MPR121Keyboard
 {
   public:
     typedef uint8_t (*i2c_com_fptr_t)(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t len);
+    
+    enum MPR121States { Init=0, Idle, Held, HeldLong, Busy };
 
-    enum KeyState { StateIdle = 0, StatePress, StateLongPress, StateRelease };
+    MPR121States state;
+    
+    int8_t last_key;
+    uint32_t last_tap;
+    uint8_t char_idx;
 
-    struct KeyEvent {
-        char key;
-        KeyState state;
-    };
+    String queue;
 
     MPR121Keyboard();
 
@@ -30,11 +29,19 @@ class MPR121Keyboard
 
     void attachInterrupt(uint8_t pin, void (*func)(void)) const;
     void detachInterrupt(uint8_t pin) const;
-    void clearInterruptStatus(void);
+
+    void trigger(void);
+    void pressed(uint16_t value);
+    void held(uint16_t value);
+    void released(void);
 
     uint8_t status(void) const;
     uint8_t keyCount(void) const;
-    KeyEvent keyEvent(void) const;
+    uint8_t keyCount(uint16_t value) const;
+
+    bool hasEvent(void);
+    char dequeueEvent(void);
+    void queueEvent(char);
 
     uint8_t readRegister8(uint8_t reg) const;
     uint16_t readRegister16(uint8_t reg) const;

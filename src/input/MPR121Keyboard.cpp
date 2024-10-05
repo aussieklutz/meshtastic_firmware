@@ -4,38 +4,64 @@
 
 #include "MPR121Keyboard.h"
 
-#define _REG_VER 1
-#define _REG_CFG 2
-#define _REG_INT 3
-#define _REG_KEY 4
-#define _REG_BKL 5
-#define _REG_DEB 6
-#define _REG_FRQ 7
-#define _REG_RST 8
-#define _REG_FIF 9
+#define _REG_CFG 0x5E // Electrode Configuration Register
+#define _REG_RST 0x80 // Soft Reset Register
+#define _REG_KEY 0x00 // First 0x0FFF (12) bits of register 0 and 1 contain the touch status
 
-#define _WRITE_MASK (1 << 7)
+#define _KEY_MASK 0x0FFF // Key mask for the first 12 bits
+#define _NUM_KEYS 12 
 
-#define CFG_OVERFLOW_ON (1 << 0)
-#define CFG_OVERFLOW_INT (1 << 1)
-#define CFG_CAPSLOCK_INT (1 << 2)
-#define CFG_NUMLOCK_INT (1 << 3)
-#define CFG_KEY_INT (1 << 4)
-#define CFG_PANIC_INT (1 << 5)
-#define CFG_REPORT_MODS (1 << 6)
-#define CFG_USE_MODS (1 << 7)
+#define ECR_CALIBRATION_TRACK_FROM_ZERO (0 << 6)
+#define ECR_CALIBRATION_LOCK (1 << 6)
+#define ECR_CALIBRATION_TRACK_FROM_PARTIAL_FILTER (2 << 6) // Recommended Typical Mode
+#define ECR_CALIBRATION_TRACK_FROM_FULL_FILTER (3 << 6)
+#define ECR_PROXIMITY_DETECTION_OFF (0 << 0) // Not using proximity detection
+#define ECR_TOUCH_DETECTION_12CH (12 << 0) // Using all 12 channels
 
-#define INT_OVERFLOW (1 << 0)
-#define INT_CAPSLOCK (1 << 1)
-#define INT_NUMLOCK (1 << 2)
-#define INT_KEY (1 << 3)
-#define INT_PANIC (1 << 4)
+#define MPR121_NONE 0x00
+#define MPR121_REBOOT 0x90
+#define MPR121_LEFT 0xb4
+#define MPR121_UP 0xb5
+#define MPR121_DOWN 0xb6
+#define MPR121_RIGHT 0xb7
+#define MPR121_ESC 0x1b
+#define MPR121_BSP 0x08
+#define MPR121_SELECT 0x0d
 
-#define KEY_CAPSLOCK (1 << 5)
-#define KEY_NUMLOCK (1 << 6)
-#define KEY_COUNT_MASK (0x1F)
+#define LONG_PRESS_THRESHOLD 2000
+#define MULTI_TAP_THRESHOLD 2000
 
-MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(nullptr), writeCallback(nullptr) {}
+uint8_t TapMod[12] = {1, 2, 1, 13, 7, 7, 7, 7, 7, 9, 7, 9}; // Num chars per key, Modulus for rotating through characters
+
+unsigned char TapMap[12][13] = {
+    {MPR121_BSP},
+    {'0', ' '},
+    {MPR121_SELECT},
+    {'1', '.', ',', '?', '!', ':', ';', '-', '_', '\\', '/', '(', ')'},
+    {'2', 'a', 'b', 'c', 'A', 'B', 'C'},
+    {'3', 'd', 'e', 'f', 'D', 'E', 'F'},
+    {'4', 'g', 'h', 'i', 'G', 'H', 'I'},
+    {'5', 'j', 'k', 'l', 'J', 'K', 'L'},
+    {'6', 'm', 'n', 'o', 'M', 'N', 'O'},
+    {'7', 'p', 'q', 'r', 's', 'P', 'Q', 'R', 'S'},
+    {'8', 't', 'u', 'v', 'T', 'U', 'V'},
+    {'9', 'w', 'x', 'y', 'z', 'W', 'X', 'Y', 'Z'}
+};
+
+unsigned char LongMap[12] = {
+    MPR121_ESC, ' ', MPR121_NONE, 
+    MPR121_NONE, MPR121_UP, MPR121_NONE, 
+    MPR121_LEFT, MPR121_NONE, MPR121_RIGHT, 
+    MPR121_NONE, MPR121_DOWN, MPR121_NONE
+};
+
+MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(nullptr), writeCallback(nullptr) {
+    state = Init;
+    last_key = -1;
+    last_tap = 0L;
+    char_idx = 0;
+    queue = "";
+}
 
 void MPR121Keyboard::begin(uint8_t addr, TwoWire *wire)
 {
@@ -68,8 +94,9 @@ void MPR121Keyboard::reset()
         writeCallback(m_addr, _REG_RST, &data, 0);
     }
     delay(100);
-    writeRegister(_REG_CFG, readRegister8(_REG_CFG) | CFG_REPORT_MODS);
+    writeRegister(_REG_CFG, ECR_CALIBRATION_TRACK_FROM_PARTIAL_FILTER | ECR_PROXIMITY_DETECTION_OFF | ECR_TOUCH_DETECTION_12CH);
     delay(100);
+    state = Idle;
 }
 
 void MPR121Keyboard::attachInterrupt(uint8_t pin, void (*func)(void)) const
@@ -83,33 +110,150 @@ void MPR121Keyboard::detachInterrupt(uint8_t pin) const
     ::detachInterrupt(pin);
 }
 
-void MPR121Keyboard::clearInterruptStatus()
-{
-    writeRegister(_REG_INT, 0x00);
-}
-
 uint8_t MPR121Keyboard::status() const
 {
-    return readRegister8(_REG_KEY);
+    return readRegister16(_REG_KEY);
 }
 
 uint8_t MPR121Keyboard::keyCount() const
 {
-    return status() & KEY_COUNT_MASK;
+    // Read the key register
+    uint16_t keyRegister = readRegister16(_REG_KEY);
+    return keyCount(keyRegister);
 }
 
-MPR121Keyboard::KeyEvent MPR121Keyboard::keyEvent() const
+uint8_t MPR121Keyboard::keyCount(uint16_t value) const
 {
-    KeyEvent event = {.key = '\0', .state = StateIdle};
+    // Mask the first 12 bits
+    uint16_t buttonState = value & _KEY_MASK;
 
-    if (keyCount() == 0)
-        return event;
+    // Count how many bits are set to 1 (i.e., how many buttons are pressed)
+    uint8_t numButtonsPressed = 0;
+    for (uint8_t i = 0; i < 12; ++i) {
+        if (buttonState & (1 << i)) {
+            numButtonsPressed++;
+        }
+    }
+    
+    return numButtonsPressed;
+}
 
-    const uint16_t buf = readRegister16(_REG_FIF);
-    event.key = buf >> 8;
-    event.state = KeyState(buf & 0xFF);
+void MPR121Keyboard::trigger()
+{
+    // Intended to fire in response to an interrupt from the MPR121 or a longpress callback
+    // Only functional if not in Init state
+    if (state != Init) {
+        // Read the key register
+        uint16_t keyRegister = readRegister16(_REG_KEY);
+        uint8_t keysPressed = keyCount(keyRegister);
+        if(keysPressed == 0)
+        {
+            // No buttons pressed
+            if(state == Held) released();
+            state = Idle;
+            return;
+        }
+        if(keysPressed == 1)
+        {
+            // No buttons pressed
+            if(state == Held || state == HeldLong) held(keyRegister);
+            if(state == Idle) pressed(keyRegister);
+            return;
+        }
+        if(keysPressed > 1)
+        {
+            // Multipress
+            state = Busy;
+            return;
+        }
+    }
+}
 
-    return event;
+void MPR121Keyboard::pressed(uint16_t keyRegister) {
+    if(state == Init || state == Busy) { return; }
+    if(keyCount(keyRegister) != 1) { return; }
+    uint16_t buttonState = keyRegister & _KEY_MASK;
+    uint8_t next_key = 0;
+    for (uint8_t i = 0; i < 12; ++i) {
+        if (buttonState & (1 << i)) {
+            next_key = i;
+        }
+    }
+    uint32_t now = millis();
+    int32_t tap_interval = now - last_tap;
+    if (tap_interval < 0) {
+        // long running, millis has overflowed.
+        last_tap = 0;
+        state = Busy;
+        return;
+    }
+    if (next_key != last_key || tap_interval > MULTI_TAP_THRESHOLD) {
+        char_idx = 0;
+    } else {
+        char_idx += 1;
+    }
+    last_key = next_key;
+    last_tap = now;
+    return;
+}
+
+bool MPR121Keyboard::hasEvent() {
+    return queue.length() > 0;
+}
+
+void MPR121Keyboard::queueEvent(char next) {
+    if(next == MPR121_NONE) { return; }
+    queue.concat(next);
+}
+
+char MPR121Keyboard::dequeueEvent() {
+    if(queue.length() < 1) {
+        return MPR121_NONE;
+    }
+    char next = queue.charAt(0);
+    queue.remove(0,1);
+    return next;
+}
+
+void MPR121Keyboard::held(uint16_t keyRegister) {
+    if(state == Init || state == Busy) { return; }
+    if(keyCount(keyRegister) != 1) { return; }
+    uint16_t buttonState = keyRegister & _KEY_MASK;
+    uint8_t next_key = 0;
+    for (uint8_t i = 0; i < 12; ++i) {
+        if (buttonState & (1 << i)) {
+            next_key = i;
+        }
+    }
+    uint32_t now = millis();
+    int32_t held_interval = now - last_tap;
+    if (held_interval < 0 || next_key != last_key) {
+        // long running, millis has overflowed, or a key has been switched quickly...
+        last_tap = 0;
+        state = Busy;
+        return;
+    }
+    if (held_interval > LONG_PRESS_THRESHOLD) {
+        // Set state to heldlong, send a longpress, and reset the timer...
+        state = HeldLong; // heldlong will allow this function to still fire, but prevent a "release"
+        queueEvent(LongMap[last_key]);
+        last_tap = now;
+    }
+    return;
+}
+
+void MPR121Keyboard::released() {
+    if(state != Held) { return; }
+    // would clear longpress callback... later.
+    if(last_key < 0 || last_key > _NUM_KEYS) { // reset to idle if last_key out of bounds
+        last_key = -1;
+        state = Idle;
+        return;
+    }
+    if(char_idx > 0 && TapMod[last_key] > 1) {
+        queueEvent(MPR121_BSP);
+    }
+    queueEvent(TapMap[last_key][(char_idx % TapMod[last_key])]);
 }
 
 uint8_t MPR121Keyboard::readRegister8(uint8_t reg) const
@@ -157,7 +301,7 @@ uint16_t MPR121Keyboard::readRegister16(uint8_t reg) const
 void MPR121Keyboard::writeRegister(uint8_t reg, uint8_t value)
 {
     uint8_t data[2];
-    data[0] = reg | _WRITE_MASK;
+    data[0] = reg;
     data[1] = value;
 
     if (m_wire) {

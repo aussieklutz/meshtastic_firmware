@@ -40,6 +40,9 @@ int32_t KbI2cBase::runOnce()
                 Q10keyboard.begin(BBQ10_KB_ADDR, &Wire1);
                 Q10keyboard.setBacklight(0);
             }
+            if (cardkb_found.address == MPR121_KB_ADDR) {
+                MPRkeyboard.begin(MPR121_KB_ADDR, &Wire1);
+            }
             break;
 #endif
         case ScanI2C::WIRE:
@@ -49,7 +52,6 @@ int32_t KbI2cBase::runOnce()
                 Q10keyboard.begin(BBQ10_KB_ADDR, &Wire);
                 Q10keyboard.setBacklight(0);
             }
-            break;
             if (cardkb_found.address == MPR121_KB_ADDR) {
                 MPRkeyboard.begin(MPR121_KB_ADDR, &Wire);
             }
@@ -162,101 +164,62 @@ int32_t KbI2cBase::runOnce()
         break;
     }
     case 0x12: { // MPR121
-        int keyCount = MPRkeyboard.keyCount();
-        while (keyCount--) {
-            const MPR121Keyboard::KeyEvent key = MPRkeyboard.keyEvent();
-            if ((key.key != 0x00) && (key.state == MPR121Keyboard::StateRelease)) {
-                InputEvent e;
-                e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE;
-                e.source = this->_originName;
-                switch (key.key) {
-                case 'p': // TAB
-                case 't': // TAB as well
-                    if (is_sym) {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = 0x09; // TAB Scancode
-                        is_sym = false;  // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 'q': // ESC
-                    if (is_sym) {
-                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_CANCEL;
-                        e.kbchar = 0x1b;
-                        is_sym = false; // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 0x08: // Back
-                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_BACK;
-                    e.kbchar = key.key;
-                    break;
-                case 'e': // sym e
-                    if (is_sym) {
-                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_UP;
-                        e.kbchar = INPUT_BROKER_MSG_UP;
-                        is_sym = false; // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 'x': // sym x
-                    if (is_sym) {
-                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_DOWN;
-                        e.kbchar = INPUT_BROKER_MSG_DOWN;
-                        is_sym = false; // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 's': // sym s
-                    if (is_sym) {
-                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_LEFT;
-                        e.kbchar = 0x00; // tweak for destSelect
-                        is_sym = false;  // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 'f': // sym f
-                    if (is_sym) {
-                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_RIGHT;
-                        e.kbchar = 0x00; // tweak for destSelect
-                        is_sym = false;  // reset sym state after second keypress
-                    } else {
-                        e.inputEvent = ANYKEY;
-                        e.kbchar = key.key;
-                    }
-                    break;
-                case 0x13: // Code scanner says the SYM key is 0x13
-                    is_sym = !is_sym;
-                    e.inputEvent = ANYKEY;
-                    e.kbchar = is_sym ? INPUT_BROKER_MSG_FN_SYMBOL_ON   // send 0xf1 to tell CannedMessages to display that
-                                      : INPUT_BROKER_MSG_FN_SYMBOL_OFF; // the modifier key is active
-                    break;
-                case 0x0a: // apparently Enter on Q10 is a line feed instead of carriage return
-                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_SELECT;
-                    break;
-                case 0x00: // nopress
+        MPRkeyboard.trigger();
+        while (MPRkeyboard.hasEvent()) {
+            char nextEvent = MPRkeyboard.dequeueEvent();
+            InputEvent e;
+            e.inputEvent = ANYKEY;
+            e.kbchar = 0x00;
+            e.source = this->_originName;
+            switch (nextEvent) {
+                case 0x00: // MPR121_NONE 
                     e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE;
+                    e.kbchar = 0x00;
                     break;
-                default: // all other keys
+                case 0x90: // MPR121_REBOOT
                     e.inputEvent = ANYKEY;
-                    e.kbchar = key.key;
-                    is_sym = false; // reset sym state after second keypress
+                    e.kbchar = INPUT_BROKER_MSG_REBOOT;
                     break;
-                }
-
-                if (e.inputEvent != meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE) {
-                    this->notifyObservers(&e);
-                }
+                case 0xb4: // MPR121_LEFT
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_LEFT;
+                    e.kbchar = 0x00;
+                    break;
+                case 0xb5: // MPR121_UP
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_UP;
+                    e.kbchar = 0x00;
+                    break;
+                case 0xb6: // MPR121_DOWN
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_DOWN;
+                    e.kbchar = 0x00;
+                    break;
+                case 0xb7: // MPR121_RIGHT
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_RIGHT;
+                    e.kbchar = 0x00;
+                    break;
+                case 0x1b: // MPR121_ESC
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_CANCEL;
+                    e.kbchar = 0x1b;
+                    break;
+                case 0x08: // MPR121_BSP
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_BACK;
+                    e.kbchar = 0x08;
+                    break;
+                case 0x0d: // MPR121_SELECT
+                    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_SELECT;
+                    e.kbchar = 0x0d;
+                    break;
+                default:
+                    if(nextEvent > 127) {
+                        e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE;
+                        e.kbchar = 0x00;
+                        break;
+                    }
+                    e.inputEvent = ANYKEY;
+                    e.kbchar = nextEvent;
+                    break;
+            }
+            if (e.inputEvent != meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE) {
+                this->notifyObservers(&e);
             }
         }
         break;
