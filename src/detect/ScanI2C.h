@@ -19,7 +19,6 @@ class ScanI2C
         TDECKKB,
         BBQ10KB,
         RAK14004,
-        MPR121KB,
         PMU_AXP192_AXP2101,
         BME_680,
         BME_280,
@@ -62,7 +61,8 @@ class ScanI2C
         STK8BAXX,
         ICM20948,
         MAX30102,
-        TPS65233
+        TPS65233,
+        MPR121KB
     } DeviceType;
 
     // typedef uint8_t DeviceAddress;
