@@ -169,6 +169,10 @@ int32_t KbI2cBase::runOnce()
             char nextEvent = MPRkeyboard.dequeueEvent();
             InputEvent e;
             e.inputEvent = ANYKEY;
+            e.source = this->_originName;
+            MPRkeyboard.status() & e.kbchar=INPUT_BROKER_MSG_FN_SYMBOL_ON | e.kbchar=INPUT_BROKER_MSG_FN_SYMBOL_OFF;
+            this->notifyObservers(&e);
+            e.inputEvent = ANYKEY;
             e.kbchar = 0x00;
             e.source = this->_originName;
             switch (nextEvent) {

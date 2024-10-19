@@ -78,6 +78,20 @@ MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(null
     queue = "";
 }
 
+bool MPR121Keyboard::status()
+{
+    switch (state) {
+        case Held:
+            status_toggle = true;
+        case Idle:
+            status_toggle = false;
+        default:
+            status_toggle = !status_toggle;
+            break;
+    }
+    return status_toggle;
+}
+
 void MPR121Keyboard::begin(uint8_t addr, TwoWire *wire)
 {
     m_addr = addr;

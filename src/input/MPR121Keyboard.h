@@ -16,10 +16,13 @@ class MPR121Keyboard
     int8_t last_key;
     uint32_t last_tap;
     uint8_t char_idx;
+    bool status_toggle;
 
     String queue;
 
     MPR121Keyboard();
+
+    bool status();
 
     void begin(uint8_t addr = MPR121_KB_ADDR, TwoWire *wire = &Wire);
 
