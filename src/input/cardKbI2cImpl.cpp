@@ -27,21 +27,26 @@ void CardKbI2cImpl::init()
             switch (kb_info.type) {
             case ScanI2C::DeviceType::RAK14004:
                 kb_model = 0x02;
+                LOG_DEBUG("Keyboard is RAK14004\n");
                 break;
             case ScanI2C::DeviceType::CARDKB:
                 kb_model = 0x00;
+                LOG_DEBUG("Keyboard is CARDKB\n");
                 break;
             case ScanI2C::DeviceType::TDECKKB:
                 // assign an arbitrary value to distinguish from other models
                 kb_model = 0x10;
+                LOG_DEBUG("Keyboard is TDECKKB\n");
                 break;
             case ScanI2C::DeviceType::BBQ10KB:
                 // assign an arbitrary value to distinguish from other models
                 kb_model = 0x11;
+                LOG_DEBUG("Keyboard is BBQ10KB\n");
                 break;
             case ScanI2C::DeviceType::MPR121KB:
                 // assign an arbitrary value to distinguish from other models
                 kb_model = 0x12;
+                LOG_DEBUG("Keyboard is MPR121KB\n");
                 break;
             default:
                 // use this as default since it's also just zero
@@ -49,6 +54,7 @@ void CardKbI2cImpl::init()
                 kb_model = 0x00;
             }
         }
+        LOG_DEBUG("Keyboard Model: 0x%02x/n", kb_info.type);
         if (cardkb_found.address == 0x00) {
             disable();
             return;

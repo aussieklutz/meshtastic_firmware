@@ -8,6 +8,7 @@ extern uint8_t kb_model;
 
 KbI2cBase::KbI2cBase(const char *name) : concurrency::OSThread(name)
 {
+    LOG_DEBUG("Instantiate KbI2cBase: %s\n", name);
     this->_originName = name;
 }
 
@@ -30,6 +31,7 @@ uint8_t read_from_14004(TwoWire *i2cBus, uint8_t reg, uint8_t *data, uint8_t len
 
 int32_t KbI2cBase::runOnce()
 {
+    LOG_DEBUG("KbI2cBase::runOnce()");
     if (!i2cBus) {
         switch (cardkb_found.port) {
         case ScanI2C::WIRE1:
@@ -164,14 +166,15 @@ int32_t KbI2cBase::runOnce()
         break;
     }
     case 0x12: { // MPR121
+        LOG_DEBUG("KB_POLL");
         MPRkeyboard.trigger();
+        InputEvent e;
+        e.inputEvent = ANYKEY;
+        e.source = this->_originName;
+        e.kbchar = MPRkeyboard.status() & INPUT_BROKER_MSG_FN_SYMBOL_ON | INPUT_BROKER_MSG_FN_SYMBOL_OFF;
+        this->notifyObservers(&e);
         while (MPRkeyboard.hasEvent()) {
             char nextEvent = MPRkeyboard.dequeueEvent();
-            InputEvent e;
-            e.inputEvent = ANYKEY;
-            e.source = this->_originName;
-            MPRkeyboard.status() & e.kbchar=INPUT_BROKER_MSG_FN_SYMBOL_ON | e.kbchar=INPUT_BROKER_MSG_FN_SYMBOL_OFF;
-            this->notifyObservers(&e);
             e.inputEvent = ANYKEY;
             e.kbchar = 0x00;
             e.source = this->_originName;

@@ -114,7 +114,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CARDKB_ADDR 0x5F
 #define TDECK_KB_ADDR 0x55
 #define BBQ10_KB_ADDR 0x1F
+#ifdef MPR121_USE_5A
 #define MPR121_KB_ADDR 0x5A
+#endif
+#ifndef MPR121_USE_5A
+#define MPR121_KB_ADDR 0x5B
+#endif
+
 
 // -----------------------------------------------------------------------------
 // SENSOR
@@ -146,7 +152,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DFROBOT_LARK_ADDR 0x42
 #define NAU7802_ADDR 0x2A
 #define MAX30102_ADDR 0x57
+#ifdef MPR121_USE_5A
+#define MLX90614_ADDR_DEF 0x5B
+#endif
+#ifndef MPR121_USE_5A
 #define MLX90614_ADDR_DEF 0x5A
+#endif
+
 
 // -----------------------------------------------------------------------------
 // ACCELEROMETER

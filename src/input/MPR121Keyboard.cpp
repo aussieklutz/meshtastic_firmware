@@ -1,6 +1,7 @@
 // Based on the BBQ10 Keyboard
 
 #include <Arduino.h>
+#include <main.h>
 
 #include "MPR121Keyboard.h"
 
@@ -71,11 +72,13 @@ uint8_t KeyMap[12] = {
 
 
 MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(nullptr), writeCallback(nullptr) {
+    LOG_DEBUG("MPR121 Object Constructed\n");
     state = Init;
     last_key = -1;
     last_tap = 0L;
     char_idx = 0;
     queue = "";
+    
 }
 
 bool MPR121Keyboard::status()
@@ -83,8 +86,10 @@ bool MPR121Keyboard::status()
     switch (state) {
         case Held:
             status_toggle = true;
+            break;
         case Idle:
             status_toggle = false;
+            break;
         default:
             status_toggle = !status_toggle;
             break;
@@ -111,8 +116,17 @@ void MPR121Keyboard::begin(i2c_com_fptr_t r, i2c_com_fptr_t w, uint8_t addr)
     reset();
 }
 
+bool MPR121Keyboard::ready()
+{
+    bool ready = false;
+
+
+    return ready;
+}
+
 void MPR121Keyboard::reset()
 {
+    LOG_DEBUG("MPR121 Resetting");
     if (m_wire) {
         m_wire->beginTransmission(m_addr);
         m_wire->write(_REG_RST);
@@ -212,6 +226,10 @@ void MPR121Keyboard::trigger()
             // Multipress
             state = Busy;
             return;
+        }
+    } else {
+        if(!ready()) {
+            reset();
         }
     }
 }
