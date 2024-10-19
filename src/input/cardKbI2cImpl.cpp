@@ -21,31 +21,37 @@ void CardKbI2cImpl::init()
 #endif
         i2cScanner->scanPort(ScanI2C::I2CPort::WIRE, i2caddr_scan, i2caddr_asize);
         auto kb_info = i2cScanner->firstKeyboard();
+        LOG_DEBUG("Detected Keyboard Address: %02x\n", kb_info.address.address);
 
         if (kb_info.type != ScanI2C::DeviceType::NONE) {
             cardkb_found = kb_info.address;
             switch (kb_info.type) {
             case ScanI2C::DeviceType::RAK14004:
                 kb_model = 0x02;
+                cardkb_found.address = CARDKB_ADDR;
                 LOG_DEBUG("Keyboard is RAK14004\n");
                 break;
             case ScanI2C::DeviceType::CARDKB:
                 kb_model = 0x00;
+                cardkb_found.address = CARDKB_ADDR;
                 LOG_DEBUG("Keyboard is CARDKB\n");
                 break;
             case ScanI2C::DeviceType::TDECKKB:
                 // assign an arbitrary value to distinguish from other models
                 kb_model = 0x10;
+                cardkb_found.address = TDECK_KB_ADDR;
                 LOG_DEBUG("Keyboard is TDECKKB\n");
                 break;
             case ScanI2C::DeviceType::BBQ10KB:
                 // assign an arbitrary value to distinguish from other models
                 kb_model = 0x11;
+                cardkb_found.address = BBQ10_KB_ADDR;
                 LOG_DEBUG("Keyboard is BBQ10KB\n");
                 break;
             case ScanI2C::DeviceType::MPR121KB:
                 // assign an arbitrary value to distinguish from other models
-                kb_model = 0x12;
+                kb_model = 0x37;
+                cardkb_found.address = MPR121_KB_ADDR;
                 LOG_DEBUG("Keyboard is MPR121KB\n");
                 break;
             default:
@@ -54,7 +60,7 @@ void CardKbI2cImpl::init()
                 kb_model = 0x00;
             }
         }
-        LOG_DEBUG("Keyboard Model: 0x%02x/n", kb_info.type);
+        LOG_DEBUG("Keyboard Type: 0x%02x Model: 0x%02x Address: 0x%02x\n", kb_info.type, kb_model, cardkb_found.address);
         if (cardkb_found.address == 0x00) {
             disable();
             return;

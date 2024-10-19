@@ -111,8 +111,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // #define SCREEN_MIRROR
 
 // I2C Keyboards (M5Stack, RAK14004, T-Deck)
+#define MPR121_USE_5A
 #define CARDKB_ADDR 0x5F
-#define TDECK_KB_ADDR 0x55
+#define TDECK_KB_ADDR 0x55l
 #define BBQ10_KB_ADDR 0x1F
 #ifdef MPR121_USE_5A
 #define MPR121_KB_ADDR 0x5A

@@ -72,7 +72,7 @@ uint8_t KeyMap[12] = {
 
 
 MPR121Keyboard::MPR121Keyboard() : m_wire(nullptr), m_addr(0), readCallback(nullptr), writeCallback(nullptr) {
-    LOG_DEBUG("MPR121 Object Constructed\n");
+    LOG_DEBUG("MPR121 @ %02x\n", m_addr);
     state = Init;
     last_key = -1;
     last_tap = 0L;

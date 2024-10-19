@@ -165,8 +165,8 @@ int32_t KbI2cBase::runOnce()
         }
         break;
     }
-    case 0x12: { // MPR121
-        LOG_DEBUG("KB_POLL");
+    case 0x37: { // MPR121
+        LOG_DEBUG("KB_POLL\n");
         MPRkeyboard.trigger();
         InputEvent e;
         e.inputEvent = ANYKEY;
